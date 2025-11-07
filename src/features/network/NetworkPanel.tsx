@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FormCard } from "@/components/FormCard";
 import { GraphView } from "./GraphView";
 import { MetricsView } from "./MetricsView";
@@ -7,16 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useRebuild, useNetwork, RebuildParams } from "@/api/queries";
+import { useRebuild, useNetwork, RebuildParams, NetworkData } from "@/api/queries";
 import { RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import defaultNetwork from "@/assets/default-network.json";
 
 export function NetworkPanel() {
   const { toast } = useToast();
   const rebuild = useRebuild();
-  const network = useNetwork();
+  const network = useNetwork(false); // Disable auto-fetch, we'll use default data
   const [selectedNode, setSelectedNode] = useState<number | null>(null);
+  const [defaultData, setDefaultData] = useState<NetworkData | null>(null);
 
   const [params, setParams] = useState<RebuildParams>({
     num_nodes: 6,
@@ -25,6 +27,17 @@ export function NetworkPanel() {
     eve_prob: 0.0,
     protocol: "mixed",
   });
+
+  useEffect(() => {
+    // Transform default data to match NetworkData interface
+    const transformed: NetworkData = {
+      num_nodes: defaultNetwork.num_nodes,
+      edges: defaultNetwork.edges.map(e => [e[0], e[1]] as [number, number]),
+      keys: defaultNetwork.keys as Record<string, number[]>,
+      metrics: defaultNetwork.metrics as Record<string, Record<string, { qber: number[]; noise: number[] }>>
+    };
+    setDefaultData(transformed);
+  }, []);
 
   const handleRebuild = () => {
     rebuild.mutate(params, {
@@ -37,6 +50,8 @@ export function NetworkPanel() {
       },
     });
   };
+
+  const displayData = network.data || defaultData;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -121,11 +136,11 @@ export function NetworkPanel() {
 
       {network.isLoading && <LoadingSkeleton />}
 
-      {network.data && (
+      {displayData && (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <GraphView data={network.data} selectedNode={selectedNode} onSelectNode={setSelectedNode} />
-            <MetricsView nodeId={selectedNode} />
+            <GraphView data={displayData} selectedNode={selectedNode} onSelectNode={setSelectedNode} />
+            <MetricsView nodeId={selectedNode} metricsData={selectedNode !== null ? displayData.metrics[selectedNode.toString()] : undefined} />
           </div>
 
           <ChatView />

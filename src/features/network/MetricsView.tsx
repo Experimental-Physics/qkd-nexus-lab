@@ -1,16 +1,13 @@
 import { ChartCard } from "@/components/ChartCard";
 import { MiniSparkline } from "@/components/MiniSparkline";
-import { useMetrics } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
-import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 interface MetricsViewProps {
   nodeId: number | null;
+  metricsData?: Record<string, { qber: number[]; noise: number[] }>;
 }
 
-export function MetricsView({ nodeId }: MetricsViewProps) {
-  const metrics = useMetrics(nodeId);
-
+export function MetricsView({ nodeId, metricsData }: MetricsViewProps) {
   if (nodeId === null) {
     return (
       <ChartCard title="Node Metrics" description="Select a node to view metrics">
@@ -21,15 +18,7 @@ export function MetricsView({ nodeId }: MetricsViewProps) {
     );
   }
 
-  if (metrics.isLoading) {
-    return (
-      <ChartCard title={`Node ${nodeId} Metrics`}>
-        <LoadingSkeleton />
-      </ChartCard>
-    );
-  }
-
-  if (!metrics.data || Object.keys(metrics.data).length === 0) {
+  if (!metricsData || Object.keys(metricsData).length === 0) {
     return (
       <ChartCard title={`Node ${nodeId} Metrics`}>
         <div className="h-[300px] flex items-center justify-center text-muted-foreground">
@@ -42,7 +31,7 @@ export function MetricsView({ nodeId }: MetricsViewProps) {
   return (
     <ChartCard title={`Node ${nodeId} Metrics`} description="Per-neighbor QBER and noise levels">
       <div className="space-y-4">
-        {Object.entries(metrics.data).map(([neighbor, data]) => (
+        {Object.entries(metricsData).map(([neighbor, data]) => (
           <div key={neighbor} className="p-4 rounded-lg border border-quantum-cyan/20 bg-quantum-cyan/5 space-y-3">
             <div className="flex items-center justify-between">
               <Badge variant="outline" className="border-quantum-cyan/30">
