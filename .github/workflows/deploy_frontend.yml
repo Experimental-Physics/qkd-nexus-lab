@@ -11,24 +11,19 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     env:
       VITE_API_URL: https://qkd-qiskit.onrender.com
       VITE_WS_URL: wss://qkd-qiskit.onrender.com
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - run: npm ci
       - run: npm run build --if-present
-
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build   # or ./dist if Vite default
+          publish_dir: ./dist  # Cambiato qui!
