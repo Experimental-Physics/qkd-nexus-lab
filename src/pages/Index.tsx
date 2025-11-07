@@ -8,7 +8,7 @@ import { Activity, Network, Microscope } from "lucide-react";
 import { API_URL } from "@/api/client";
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState("sweep");
+  const [activeTab, setActiveTab] = useState("workbench");
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -35,6 +35,14 @@ const Index = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-card/50 backdrop-blur-sm border border-quantum-cyan/20 h-auto p-1">
             <TabsTrigger
+              value="workbench"
+              className="data-[state=active]:bg-quantum-purple/20 data-[state=active]:text-quantum-purple transition-all"
+            >
+              <Microscope className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Protocol Workbench</span>
+              <span className="sm:hidden">Workbench</span>
+            </TabsTrigger>
+            <TabsTrigger
               value="sweep"
               className="data-[state=active]:bg-quantum-cyan/20 data-[state=active]:text-quantum-cyan transition-all"
             >
@@ -50,27 +58,19 @@ const Index = () => {
               <span className="hidden sm:inline">Network & Chat</span>
               <span className="sm:hidden">Network</span>
             </TabsTrigger>
-            <TabsTrigger
-              value="workbench"
-              className="data-[state=active]:bg-quantum-purple/20 data-[state=active]:text-quantum-purple transition-all"
-            >
-              <Microscope className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">Protocol Workbench</span>
-              <span className="sm:hidden">Workbench</span>
-            </TabsTrigger>
           </TabsList>
 
           <div className="mt-6">
+            <TabsContent value="workbench" className="m-0">
+              <WorkbenchPanel />
+            </TabsContent>
+
             <TabsContent value="sweep" className="m-0">
               <SweepPanel />
             </TabsContent>
 
             <TabsContent value="network" className="m-0">
               <NetworkPanel />
-            </TabsContent>
-
-            <TabsContent value="workbench" className="m-0">
-              <WorkbenchPanel />
             </TabsContent>
           </div>
         </Tabs>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FormCard } from "@/components/FormCard";
 import { ChartCard } from "@/components/ChartCard";
 import { Button } from "@/components/ui/button";
@@ -8,17 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { KeyPill } from "@/components/KeyPill";
-import { useWorkbench, WorkbenchParams } from "@/api/queries";
+import { useWorkbench, WorkbenchParams, WorkbenchResult } from "@/api/queries";
 import { Play, Download, CheckCircle2, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { BitInspector } from "./BitInspector";
 import { Timeline } from "./Timeline";
+import defaultWorkbench from "@/assets/default-workbench.json";
 
 export function WorkbenchPanel() {
   const { toast } = useToast();
   const workbench = useWorkbench();
   const [bitIndex, setBitIndex] = useState(0);
+  const [defaultData, setDefaultData] = useState<WorkbenchResult | null>(null);
 
   const [params, setParams] = useState<WorkbenchParams>({
     protocol: "bb84",
@@ -28,6 +30,23 @@ export function WorkbenchPanel() {
     sample_frac: 0.5,
     seed: undefined,
   });
+
+  useEffect(() => {
+    // Transform the default JSON to match WorkbenchResult format
+    const transformed: WorkbenchResult = {
+      protocol: defaultWorkbench.protocol,
+      params: {
+        protocol: defaultWorkbench.protocol as "bb84" | "e91",
+        key_len: defaultWorkbench.params.key_len,
+        noise: defaultWorkbench.params.noise_level,
+        eve_prob: defaultWorkbench.params.eve_prob,
+        sample_frac: defaultWorkbench.params.sample_frac,
+        seed: defaultWorkbench.params.seed ?? undefined,
+      },
+      trace: defaultWorkbench.trace
+    };
+    setDefaultData(transformed);
+  }, []);
 
   const handleRun = () => {
     workbench.mutate(params, {
@@ -42,8 +61,9 @@ export function WorkbenchPanel() {
   };
 
   const handleDownload = () => {
-    if (!workbench.data) return;
-    const json = JSON.stringify(workbench.data, null, 2);
+    const data = workbench.data || defaultData;
+    if (!data) return;
+    const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -52,6 +72,8 @@ export function WorkbenchPanel() {
     a.click();
     toast({ title: "Downloaded", description: "Trace saved as JSON" });
   };
+
+  const displayData = workbench.data || defaultData;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
@@ -146,7 +168,7 @@ export function WorkbenchPanel() {
             </Button>
             <Button
               onClick={handleDownload}
-              disabled={!workbench.data}
+              disabled={!displayData}
               variant="outline"
               className="border-quantum-purple/30 hover:bg-quantum-purple/10"
             >
@@ -159,39 +181,39 @@ export function WorkbenchPanel() {
       <div className="lg:col-span-2 space-y-6">
         {workbench.isPending && <LoadingSkeleton />}
 
-        {workbench.data && (
+        {displayData && (
           <>
             <div className="grid grid-cols-3 gap-4">
               <Badge variant="outline" className="p-3 justify-center border-quantum-cyan/30 bg-quantum-cyan/5">
                 <div className="text-center">
                   <div className="text-xs text-muted-foreground">QBER</div>
-                  <div className="text-2xl font-bold text-quantum-cyan">{workbench.data.trace.qber.toFixed(4)}</div>
+                  <div className="text-2xl font-bold text-quantum-cyan">{displayData.trace.qber.toFixed(4)}</div>
                 </div>
               </Badge>
               <Badge variant="outline" className="p-3 justify-center border-quantum-purple/30 bg-quantum-purple/5">
                 <div className="text-center">
                   <div className="text-xs text-muted-foreground">Final Key Length</div>
                   <div className="text-2xl font-bold text-quantum-purple">
-                    {workbench.data.trace.final_key_alice.length}
+                    {displayData.trace.final_key_alice.length}
                   </div>
                 </div>
               </Badge>
               <Badge
                 variant="outline"
                 className={`p-3 justify-center ${
-                  workbench.data.trace.keys_match
+                  displayData.trace.keys_match
                     ? "border-quantum-cyan/30 bg-quantum-cyan/5"
                     : "border-destructive/30 bg-destructive/5"
                 }`}
               >
                 <div className="text-center">
-                  {workbench.data.trace.keys_match ? (
+                  {displayData.trace.keys_match ? (
                     <CheckCircle2 className="h-6 w-6 mx-auto mb-1 text-quantum-cyan" />
                   ) : (
                     <XCircle className="h-6 w-6 mx-auto mb-1 text-destructive" />
                   )}
                   <div className="text-xs font-medium">
-                    {workbench.data.trace.keys_match ? "Keys Match" : "Keys Mismatch"}
+                    {displayData.trace.keys_match ? "Keys Match" : "Keys Mismatch"}
                   </div>
                 </div>
               </Badge>
@@ -205,30 +227,30 @@ export function WorkbenchPanel() {
                     value={[bitIndex]}
                     onValueChange={([v]) => setBitIndex(v)}
                     min={0}
-                    max={workbench.data.trace.alice_bits.length - 1}
+                    max={displayData.trace.alice_bits.length - 1}
                     step={1}
                     className="py-2"
                   />
                 </div>
-                <BitInspector trace={workbench.data.trace} bitIndex={bitIndex} />
+                <BitInspector trace={displayData.trace} bitIndex={bitIndex} />
               </div>
             </ChartCard>
 
-            <Timeline trace={workbench.data.trace} currentIndex={bitIndex} />
+            <Timeline trace={displayData.trace} currentIndex={bitIndex} />
 
             <ChartCard title="Final Keys" description="Generated quantum keys">
               <div className="space-y-3">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Alice's Key</Label>
                   <KeyPill
-                    value={workbench.data.trace.final_key_alice.join("")}
+                    value={displayData.trace.final_key_alice.join("")}
                     className="w-full justify-start text-sm"
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Bob's Key</Label>
                   <KeyPill
-                    value={workbench.data.trace.final_key_bob.join("")}
+                    value={displayData.trace.final_key_bob.join("")}
                     className="w-full justify-start text-sm"
                   />
                 </div>

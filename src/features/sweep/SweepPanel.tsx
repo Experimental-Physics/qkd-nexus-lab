@@ -21,10 +21,27 @@ import {
 import { Download, Play, TrendingDown, TrendingUp, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import defaultSweepCSV from "@/assets/default-sweep.csv?raw";
+
+function parseCSVToSweepResult(csv: string): SweepResult {
+  const lines = csv.trim().split('\n');
+  const headers = lines[0].split(',');
+  const data = lines.slice(1).map(line => line.split(','));
+  
+  return {
+    noise: data.map(row => parseFloat(row[0])),
+    qber_ideal: data.map(row => parseFloat(row[1])),
+    qber_hardware: data.map(row => parseFloat(row[2])),
+    qber_theoretical: data.map(row => parseFloat(row[3])),
+    success_ideal: data.map(row => row[4] === '1'),
+    success_hardware: data.map(row => row[5] === '1')
+  };
+}
 
 export function SweepPanel() {
   const { toast } = useToast();
   const sweep = useSweep();
+  const [defaultData, setDefaultData] = useState<SweepResult | null>(null);
 
   const [params, setParams] = useState<SweepParams>({
     noise_min: 0.0,      // interpreted as P(Eve) min
@@ -36,6 +53,11 @@ export function SweepPanel() {
     runs: 3,              // average runs per point
     include_theory: true, // show 0.25 * P(Eve) for BB84
   });
+
+  useEffect(() => {
+    const data = parseCSVToSweepResult(defaultSweepCSV);
+    setDefaultData(data);
+  }, []);
 
   // If protocol is E91, force theoretical curve off
   useEffect(() => {
@@ -63,27 +85,28 @@ export function SweepPanel() {
   };
 
   const handleExport = () => {
-    if (!sweep.data) return;
+    const data = sweep.data || defaultData;
+    if (!data) return;
 
     const header = [
       "noise",
       "qber_ideal",
       "qber_hardware",
-      ...(sweep.data.qber_theoretical ? ["qber_theoretical"] : []),
+      ...(data.qber_theoretical ? ["qber_theoretical"] : []),
       "success_ideal",
       "success_hardware",
     ];
 
-    const rows = sweep.data.noise.map((n, i) => {
+    const rows = data.noise.map((n, i) => {
       const base = [
         n,
-        sweep.data!.qber_ideal[i],
-        sweep.data!.qber_hardware[i],
+        data.qber_ideal[i],
+        data.qber_hardware[i],
       ];
-      const theory = sweep.data!.qber_theoretical ? [sweep.data!.qber_theoretical[i]] : [];
+      const theory = data.qber_theoretical ? [data.qber_theoretical[i]] : [];
       const tail = [
-        sweep.data!.success_ideal[i] ? 1 : 0,
-        sweep.data!.success_hardware[i] ? 1 : 0,
+        data.success_ideal[i] ? 1 : 0,
+        data.success_hardware[i] ? 1 : 0,
       ];
       return [...base, ...theory, ...tail];
     });
@@ -98,8 +121,10 @@ export function SweepPanel() {
     toast({ title: "Exported", description: "CSV downloaded successfully" });
   };
 
+  const displayData = sweep.data || defaultData;
+
   const chartData = useMemo(() => {
-    const d = sweep.data;
+    const d = displayData;
     if (!d) return [];
     return d.noise.map((n, i) => ({
       noise: Number(n).toFixed(3),
@@ -109,10 +134,10 @@ export function SweepPanel() {
       successIdeal: d.success_ideal[i] ? 1 : 0,
       successHardware: d.success_hardware[i] ? 1 : 0,
     }));
-  }, [sweep.data]);
+  }, [displayData]);
 
   const stats = useMemo(() => {
-    const d = sweep.data;
+    const d = displayData;
     if (!d) return null;
     const minQhw = Math.min(...d.qber_hardware);
     const maxQhw = Math.max(...d.qber_hardware);
@@ -122,7 +147,7 @@ export function SweepPanel() {
       maxQberHardware: maxQhw,
       successRateHardware: successHw,
     };
-  }, [sweep.data]);
+  }, [displayData]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
@@ -252,7 +277,7 @@ export function SweepPanel() {
             </Button>
             <Button
               onClick={handleExport}
-              disabled={!sweep.data}
+              disabled={!displayData}
               variant="outline"
               className="border-quantum-purple/30 hover:bg-quantum-purple/10"
             >
@@ -265,7 +290,7 @@ export function SweepPanel() {
       <div className="space-y-6">
         {sweep.isPending && <LoadingSkeleton />}
 
-        {sweep.data && (
+        {displayData && (
           <>
             <div className="grid grid-cols-3 gap-4">
               <Badge variant="outline" className="p-3 justify-center border-quantum-cyan/30 bg-quantum-cyan/5">
@@ -333,7 +358,7 @@ export function SweepPanel() {
                     dot={false}
                     isAnimationActive={false}
                   />
-                  {sweep.data.qber_theoretical && (
+                  {displayData.qber_theoretical && (
                     <Line
                       type="monotone"
                       dataKey="qberTheory"
