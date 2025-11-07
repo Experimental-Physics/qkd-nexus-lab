@@ -4,22 +4,31 @@ on:
   push:
     branches: [ main ]
 
+# Explicit permissions for GITHUB_TOKEN
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:  # Inietta env vars qui per production
-      VITE_API_URL: https://qkd-qiskit.onrender.com  # Sostituisci con il tuo URL Render esatto
-      VITE_WS_URL: wss://qkd-qiskit.onrender.com   # Usa wss per secure (Render è https)
+
+    env:
+      VITE_API_URL: https://qkd-qiskit.onrender.com
+      VITE_WS_URL: wss://qkd-qiskit.onrender.com
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
       - run: npm ci
       - run: npm run build --if-present
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build  # O 'dist' se usi Vite default
+          publish_dir: ./build   # or ./dist if Vite default
