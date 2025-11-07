@@ -179,9 +179,9 @@ export function WorkbenchPanel() {
       </FormCard>
 
       <div className="lg:col-span-2 space-y-6">
-        {workbench.isPending && <LoadingSkeleton />}
-
-        {displayData && (
+        {workbench.isPending ? (
+          <LoadingSkeleton />
+        ) : displayData ? (
           <>
             <div className="grid grid-cols-3 gap-4">
               <Badge variant="outline" className="p-3 justify-center border-quantum-cyan/30 bg-quantum-cyan/5">
@@ -257,7 +257,7 @@ export function WorkbenchPanel() {
               </div>
             </ChartCard>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

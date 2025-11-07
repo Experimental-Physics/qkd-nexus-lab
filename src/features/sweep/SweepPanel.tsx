@@ -288,9 +288,9 @@ export function SweepPanel() {
       </FormCard>
 
       <div className="space-y-6">
-        {sweep.isPending && <LoadingSkeleton />}
-
-        {displayData && (
+        {sweep.isPending ? (
+          <LoadingSkeleton />
+        ) : displayData ? (
           <>
             <div className="grid grid-cols-3 gap-4">
               <Badge variant="outline" className="p-3 justify-center border-quantum-cyan/30 bg-quantum-cyan/5">
@@ -410,7 +410,7 @@ export function SweepPanel() {
               </ResponsiveContainer>
             </ChartCard>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

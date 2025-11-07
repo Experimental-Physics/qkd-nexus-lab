@@ -156,9 +156,9 @@ export function NetworkPanel() {
         </div>
       </FormCard>
 
-      {network.isLoading && <LoadingSkeleton />}
-
-      {displayData && (
+      {(network.isLoading || rebuild.isPending) ? (
+        <LoadingSkeleton />
+      ) : displayData ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <GraphView data={displayData} selectedNode={selectedNode} onSelectNode={setSelectedNode} />
@@ -167,7 +167,7 @@ export function NetworkPanel() {
 
           <ChatView />
         </>
-      )}
+      ) : null}
     </div>
   );
 }
