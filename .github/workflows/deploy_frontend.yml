@@ -1,14 +1,17 @@
-name: Deploy Frontend to Render
+name: Deploy Frontend to GitHub Pages via Artifact
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # Permette deploy manuale
 
 permissions:
-  contents: write  # Se serve, ma per Render non essenziale
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     env:
       VITE_API_URL: https://qkd-qiskit.onrender.com
@@ -20,9 +23,19 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - run: npm run build --if-present  # Opzionale, Render lo fa auto, ma per test
-      - name: Deploy to Render
-        uses: johnbeynon/render-deploy-action@v0.0.8
+      - run: npm run build --if-present
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          service-id: ${{ secrets.RENDER_SERVICE_ID }}
-          api-key: ${{ secrets.RENDER_API_KEY }}
+          path: ./dist  # O ./build se il tuo build crea quella folder
+
+  deploy:
+    needs: build  # Dipende dal job build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
