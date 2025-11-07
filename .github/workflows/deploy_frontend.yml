@@ -1,12 +1,14 @@
-name: Deploy Frontend to GitHub Pages
+name: Deploy Frontend to GitHub Pages via Artifact
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # Permette deploy manuale
 
-# Explicit permissions for GITHUB_TOKEN
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -22,8 +24,18 @@ jobs:
           node-version: '20'
       - run: npm ci
       - run: npm run build --if-present
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist  # Cambiato qui!
+          path: ./dist  # O ./build se il tuo build crea quella folder
+
+  deploy:
+    needs: build  # Dipende dal job build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
