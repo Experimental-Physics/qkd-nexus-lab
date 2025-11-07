@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRebuild, useNetwork, RebuildParams, NetworkData } from "@/api/queries";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import defaultNetwork from "@/assets/default-network.json";
@@ -49,6 +49,18 @@ export function NetworkPanel() {
         toast({ title: "Rebuild Failed", description: error.message, variant: "destructive" });
       },
     });
+  };
+
+  const handleDownload = () => {
+    if (!displayData) return;
+    const json = JSON.stringify(displayData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `network_${Date.now()}.json`;
+    a.click();
+    toast({ title: "Downloaded", description: "Network data saved as JSON" });
   };
 
   const displayData = network.data || defaultData;
@@ -118,20 +130,30 @@ export function NetworkPanel() {
             </Select>
           </div>
         </div>
-        <Button
-          onClick={handleRebuild}
-          disabled={rebuild.isPending || network.isLoading}
-          className="w-full mt-4 bg-quantum-cyan hover:bg-quantum-cyan/80 text-background glow-border"
-        >
-          {rebuild.isPending ? (
-            "Rebuilding..."
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Rebuild Network
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2 mt-4">
+          <Button
+            onClick={handleRebuild}
+            disabled={rebuild.isPending || network.isLoading}
+            className="flex-1 bg-quantum-cyan hover:bg-quantum-cyan/80 text-background glow-border"
+          >
+            {rebuild.isPending ? (
+              "Rebuilding..."
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Rebuild Network
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleDownload}
+            disabled={!displayData}
+            variant="outline"
+            className="border-quantum-purple/30 hover:bg-quantum-purple/10"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
       </FormCard>
 
       {network.isLoading && <LoadingSkeleton />}
