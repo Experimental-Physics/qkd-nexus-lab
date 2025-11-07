@@ -1,14 +1,14 @@
-name: Deploy Frontend to GitHub Pages
+name: Deploy Frontend to Render
 
 on:
   push:
     branches: [ main ]
 
 permissions:
-  contents: write
+  contents: write  # Se serve, ma per Render non essenziale
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     env:
       VITE_API_URL: https://qkd-qiskit.onrender.com
@@ -20,10 +20,9 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - run: npm run build --if-present
-      - run: cp dist/index.html dist/404.html  # Nuovo step!
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - run: npm run build --if-present  # Opzionale, Render lo fa auto, ma per test
+      - name: Deploy to Render
+        uses: johnbeynon/render-deploy-action@v0.0.8
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
