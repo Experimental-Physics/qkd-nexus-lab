@@ -45,6 +45,7 @@ export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) 
         {/* Edges */}
         {data.edges.map(([from, to], i) => {
           const hasKey = data.keys[from]?.includes(to) || data.keys[to]?.includes(from);
+          const isConnected = selectedNode === from || selectedNode === to;
           return (
             <line
               key={i}
@@ -52,9 +53,11 @@ export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) 
               y1={positions[from].y}
               x2={positions[to].x}
               y2={positions[to].y}
-              stroke={hasKey ? "url(#edgeGradient)" : "hsl(var(--border))"}
-              strokeWidth={hasKey ? 2 : 1}
+              stroke={hasKey ? "hsl(var(--quantum-cyan))" : "hsl(var(--border))"}
+              strokeWidth={isConnected ? 3 : hasKey ? 2.5 : 1.5}
+              strokeOpacity={hasKey ? 0.8 : 0.4}
               strokeDasharray={hasKey ? "0" : "4 2"}
+              filter={hasKey && isConnected ? "url(#glow)" : "none"}
               className="transition-all"
             />
           );
