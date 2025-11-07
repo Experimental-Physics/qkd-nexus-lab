@@ -12,3 +12,4 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
