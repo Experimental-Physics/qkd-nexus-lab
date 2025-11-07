@@ -12,9 +12,9 @@ interface GraphViewProps {
 export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) {
   const positions = useMemo(() => {
     const n = data.num_nodes;
-    const radius = 120;
-    const centerX = 180;
-    const centerY = 180;
+    const radius = 140;
+    const centerX = 200;
+    const centerY = 200;
     
     return Array.from({ length: n }, (_, i) => {
       const angle = (2 * Math.PI * i) / n - Math.PI / 2;
@@ -27,14 +27,14 @@ export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) 
 
   return (
     <ChartCard title="Network Graph" description="Click nodes to view metrics">
-      <svg viewBox="0 0 360 360" className="w-full h-[360px]">
+      <svg viewBox="0 0 400 400" className="w-full h-[400px] bg-card/30">
         <defs>
           <linearGradient id="edgeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="hsl(var(--quantum-cyan))" stopOpacity="0.3" />
             <stop offset="100%" stopColor="hsl(var(--quantum-purple))" stopOpacity="0.3" />
           </linearGradient>
           <filter id="glow">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+            <feGaussianBlur stdDeviation="3" result="coloredBlur" />
             <feMerge>
               <feMergeNode in="coloredBlur" />
               <feMergeNode in="SourceGraphic" />
@@ -42,21 +42,21 @@ export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) 
           </filter>
         </defs>
 
-        {/* Edges */}
+        {/* Edges - render ALL connections */}
         {data.edges.map(([from, to], i) => {
-          const hasKey = data.keys[from]?.includes(to) || data.keys[to]?.includes(from);
+          const hasKey = data.keys[from.toString()]?.includes(to) || data.keys[to.toString()]?.includes(from);
           const isConnected = selectedNode === from || selectedNode === to;
           return (
             <line
-              key={i}
+              key={`edge-${from}-${to}`}
               x1={positions[from].x}
               y1={positions[from].y}
               x2={positions[to].x}
               y2={positions[to].y}
-              stroke={hasKey ? "hsl(var(--quantum-cyan))" : "hsl(var(--border))"}
-              strokeWidth={isConnected ? 3 : hasKey ? 2.5 : 1.5}
-              strokeOpacity={hasKey ? 0.8 : 0.4}
-              strokeDasharray={hasKey ? "0" : "4 2"}
+              stroke={hasKey ? "hsl(var(--quantum-cyan))" : "hsl(var(--muted-foreground))"}
+              strokeWidth={isConnected ? 4 : hasKey ? 3 : 2}
+              strokeOpacity={hasKey ? 0.9 : 0.5}
+              strokeDasharray={hasKey ? "0" : "5 3"}
               filter={hasKey && isConnected ? "url(#glow)" : "none"}
               className="transition-all"
             />
@@ -66,19 +66,19 @@ export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) 
         {/* Nodes */}
         {positions.map((pos, i) => {
           const isSelected = selectedNode === i;
-          const hasKeys = (data.keys[i]?.length || 0) > 0;
+          const hasKeys = (data.keys[i.toString()]?.length || 0) > 0;
           
           return (
-            <g key={i} className="cursor-pointer transition-all" onClick={() => onSelectNode(i)}>
+            <g key={`node-${i}`} className="cursor-pointer transition-all" onClick={() => onSelectNode(i)}>
               <circle
                 cx={pos.x}
                 cy={pos.y}
-                r={isSelected ? 20 : 16}
-                fill={hasKeys ? "hsl(var(--quantum-cyan) / 0.2)" : "hsl(var(--muted))"}
+                r={isSelected ? 22 : 18}
+                fill={hasKeys ? "hsl(var(--quantum-cyan) / 0.3)" : "hsl(var(--muted) / 0.5)"}
                 stroke={isSelected ? "hsl(var(--quantum-cyan))" : hasKeys ? "hsl(var(--quantum-blue))" : "hsl(var(--border))"}
-                strokeWidth={isSelected ? 3 : 2}
+                strokeWidth={isSelected ? 4 : 2.5}
                 filter={isSelected ? "url(#glow)" : "none"}
-                className="transition-all"
+                className="transition-all hover:r-20"
               />
               <text
                 x={pos.x}
@@ -86,8 +86,9 @@ export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) 
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fill="hsl(var(--foreground))"
-                fontSize="14"
+                fontSize="16"
                 fontWeight="bold"
+                className="pointer-events-none"
               >
                 {i}
               </text>
@@ -98,7 +99,7 @@ export function GraphView({ data, selectedNode, onSelectNode }: GraphViewProps) 
 
       <div className="mt-4 flex flex-wrap gap-2">
         {positions.map((_, i) => {
-          const keyCount = data.keys[i]?.length || 0;
+          const keyCount = data.keys[i.toString()]?.length || 0;
           return (
             <Badge
               key={i}
