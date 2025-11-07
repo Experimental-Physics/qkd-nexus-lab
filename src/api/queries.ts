@@ -1,21 +1,38 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "./client";
 
-// Types
+/* =============================
+ * Types — UPDATED SWEEP CONTRACT
+ * ============================= */
+
+// Request sent to POST /sweep
 export interface SweepParams {
-  noise_min: number;
-  noise_max: number;
-  num: number;
-  n_bits: number;
-  eve: boolean;
-  protocol: "bb84" | "e91";
+  // X-axis interpreted as P(Eve)
+  noise_min: number;         // e.g., 0.0
+  noise_max: number;         // e.g., 1.0
+  num: number;               // e.g., 15
+  n_bits: number;            // e.g., 256
+  protocol: "bb84" | "e91";  // protocol
+
+  // NEW fields
+  hardware_noise: number;    // depolarizing prob on 1q gates, e.g., 0.03
+  runs: number;              // averages per X-point, e.g., 3
+  include_theory: boolean;   // include 0.25 * P(Eve) (BB84 only)
 }
 
+// Response from POST /sweep
 export interface SweepResult {
-  noise: number[];
-  qber: number[];
-  success: boolean[];
+  noise: number[];                 // X series (P(Eve))
+  qber_ideal: number[];            // simulated, hardware ideal
+  qber_hardware: number[];         // simulated, with hardware noise
+  qber_theoretical?: number[];     // optional, BB84 only
+  success_ideal: boolean[];        // key obtained (ideal HW)
+  success_hardware: boolean[];     // key obtained (noisy HW)
 }
+
+/* =============================
+ * Other API Types (unchanged)
+ * ============================= */
 
 export interface RebuildParams {
   num_nodes: number;
@@ -89,7 +106,10 @@ export interface WorkbenchResult {
   };
 }
 
-// Hooks
+/* =============================
+ * Hooks
+ * ============================= */
+
 export const useSweep = () =>
   useMutation({
     mutationFn: (params: SweepParams) =>
@@ -119,7 +139,9 @@ export const useNetwork = (enabled = true) =>
 export const useMetrics = (nodeId: number | null) =>
   useQuery({
     queryKey: ["metrics", nodeId],
-    queryFn: () => api<Record<string, { qber: number[]; noise: number[] }>>(`/metrics/${nodeId}`),
+    queryFn: () => api<Record<string, { qber: number[]; noise: number[] }>>(
+      `/metrics/${nodeId}`
+    ),
     enabled: nodeId !== null,
     staleTime: 5000,
   });

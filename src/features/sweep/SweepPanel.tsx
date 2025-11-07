@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FormCard } from "@/components/FormCard";
 import { ChartCard } from "@/components/ChartCard";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useSweep, SweepParams, SweepResult } from "@/api/queries";
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import { Download, Play, TrendingDown, TrendingUp, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
@@ -16,39 +25,70 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 export function SweepPanel() {
   const { toast } = useToast();
   const sweep = useSweep();
-  
+
   const [params, setParams] = useState<SweepParams>({
-    noise_min: 0.0,
-    noise_max: 0.12,
-    num: 25,
+    noise_min: 0.0,      // interpreted as P(Eve) min
+    noise_max: 1.0,      // interpreted as P(Eve) max
+    num: 15,
     n_bits: 256,
-    eve: false,
     protocol: "bb84",
+    hardware_noise: 0.03, // depolarizing prob on single-qubit gates
+    runs: 3,              // average runs per point
+    include_theory: true, // show 0.25 * P(Eve) for BB84
   });
 
-  const [history, setHistory] = useState<Array<{ params: SweepParams; result: SweepResult; timestamp: number }>>([]);
+  // If protocol is E91, force theoretical curve off
+  useEffect(() => {
+    if (params.protocol === "e91" && params.include_theory) {
+      setParams((p) => ({ ...p, include_theory: false }));
+    }
+  }, [params.protocol]);
 
   const handleRun = () => {
     sweep.mutate(params, {
       onSuccess: (result) => {
-        setHistory((prev) => [{ params, result, timestamp: Date.now() }, ...prev].slice(0, 5));
-        toast({ title: "Sweep Complete", description: `Analyzed ${result.noise.length} noise levels` });
+        toast({
+          title: "Sweep Complete",
+          description: `Analyzed ${result.noise.length} noise levels`,
+        });
       },
-      onError: (error) => {
-        toast({ title: "Sweep Failed", description: error.message, variant: "destructive" });
+      onError: (error: any) => {
+        toast({
+          title: "Sweep Failed",
+          description: error?.message ?? "Unknown error",
+          variant: "destructive",
+        });
       },
     });
   };
 
   const handleExport = () => {
     if (!sweep.data) return;
-    const csv = [
-      ["Noise", "QBER", "Success"],
-      ...sweep.data.noise.map((n, i) => [n, sweep.data!.qber[i], sweep.data!.success[i]]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n");
-    
+
+    const header = [
+      "noise",
+      "qber_ideal",
+      "qber_hardware",
+      ...(sweep.data.qber_theoretical ? ["qber_theoretical"] : []),
+      "success_ideal",
+      "success_hardware",
+    ];
+
+    const rows = sweep.data.noise.map((n, i) => {
+      const base = [
+        n,
+        sweep.data!.qber_ideal[i],
+        sweep.data!.qber_hardware[i],
+      ];
+      const theory = sweep.data!.qber_theoretical ? [sweep.data!.qber_theoretical[i]] : [];
+      const tail = [
+        sweep.data!.success_ideal[i] ? 1 : 0,
+        sweep.data!.success_hardware[i] ? 1 : 0,
+      ];
+      return [...base, ...theory, ...tail];
+    });
+
+    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -58,29 +98,42 @@ export function SweepPanel() {
     toast({ title: "Exported", description: "CSV downloaded successfully" });
   };
 
-  const chartData = sweep.data
-    ? sweep.data.noise.map((n, i) => ({
-        noise: n.toFixed(4),
-        qber: sweep.data!.qber[i],
-        success: sweep.data!.success[i] ? 1 : 0,
-      }))
-    : [];
+  const chartData = useMemo(() => {
+    const d = sweep.data;
+    if (!d) return [];
+    return d.noise.map((n, i) => ({
+      noise: Number(n).toFixed(3),
+      qberIdeal: d.qber_ideal[i],
+      qberHardware: d.qber_hardware[i],
+      qberTheory: d.qber_theoretical ? d.qber_theoretical[i] : undefined,
+      successIdeal: d.success_ideal[i] ? 1 : 0,
+      successHardware: d.success_hardware[i] ? 1 : 0,
+    }));
+  }, [sweep.data]);
 
-  const stats = sweep.data
-    ? {
-        minQber: Math.min(...sweep.data.qber),
-        maxQber: Math.max(...sweep.data.qber),
-        successRate: (sweep.data.success.filter(Boolean).length / sweep.data.success.length) * 100,
-      }
-    : null;
+  const stats = useMemo(() => {
+    const d = sweep.data;
+    if (!d) return null;
+    const minQhw = Math.min(...d.qber_hardware);
+    const maxQhw = Math.max(...d.qber_hardware);
+    const successHw = d.success_hardware.filter(Boolean).length / d.success_hardware.length * 100;
+    return {
+      minQberHardware: minQhw,
+      maxQberHardware: maxQhw,
+      successRateHardware: successHw,
+    };
+  }, [sweep.data]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-      <FormCard title="Sweep Parameters" description="Configure QBER vs Noise analysis">
+      <FormCard title="Sweep Parameters" description="Configure BB84/E91 QBER vs P(Eve) analysis with hardware noise">
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Protocol</Label>
-            <Select value={params.protocol} onValueChange={(v) => setParams({ ...params, protocol: v as "bb84" | "e91" })}>
+            <Select
+              value={params.protocol}
+              onValueChange={(v) => setParams({ ...params, protocol: v as "bb84" | "e91" })}
+            >
               <SelectTrigger className="bg-muted/50 border-quantum-cyan/20">
                 <SelectValue />
               </SelectTrigger>
@@ -93,40 +146,40 @@ export function SweepPanel() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Noise Min</Label>
+              <Label>P(Eve) Min</Label>
               <Input
                 type="number"
                 step="0.01"
                 min="0"
                 max="1"
                 value={params.noise_min}
-                onChange={(e) => setParams({ ...params, noise_min: parseFloat(e.target.value) })}
+                onChange={(e) => setParams({ ...params, noise_min: parseFloat(e.target.value) || 0 })}
                 className="bg-muted/50 border-quantum-cyan/20"
               />
             </div>
             <div className="space-y-2">
-              <Label>Noise Max</Label>
+              <Label>P(Eve) Max</Label>
               <Input
                 type="number"
                 step="0.01"
                 min="0"
                 max="1"
                 value={params.noise_max}
-                onChange={(e) => setParams({ ...params, noise_max: parseFloat(e.target.value) })}
+                onChange={(e) => setParams({ ...params, noise_max: parseFloat(e.target.value) || 0 })}
                 className="bg-muted/50 border-quantum-cyan/20"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Number of Points</Label>
+              <Label># Points</Label>
               <Input
                 type="number"
                 min="2"
                 max="400"
                 value={params.num}
-                onChange={(e) => setParams({ ...params, num: parseInt(e.target.value) })}
+                onChange={(e) => setParams({ ...params, num: parseInt(e.target.value) || 2 })}
                 className="bg-muted/50 border-quantum-cyan/20"
               />
             </div>
@@ -137,15 +190,51 @@ export function SweepPanel() {
                 min="8"
                 max="8192"
                 value={params.n_bits}
-                onChange={(e) => setParams({ ...params, n_bits: parseInt(e.target.value) })}
+                onChange={(e) => setParams({ ...params, n_bits: parseInt(e.target.value) || 8 })}
+                className="bg-muted/50 border-quantum-cyan/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Runs / point</Label>
+              <Input
+                type="number"
+                min="1"
+                max="50"
+                value={params.runs}
+                onChange={(e) => setParams({ ...params, runs: Math.max(1, parseInt(e.target.value) || 1) })}
                 className="bg-muted/50 border-quantum-cyan/20"
               />
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Switch checked={params.eve} onCheckedChange={(checked) => setParams({ ...params, eve: checked })} />
-            <Label>Enable Eve (Eavesdropper)</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Hardware Noise (depolarizing)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                value={params.hardware_noise}
+                onChange={(e) => setParams({ ...params, hardware_noise: Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                className="bg-muted/50 border-quantum-cyan/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className={params.protocol === "e91" ? "text-muted-foreground" : ""}>
+                Include theoretical curve (0.25·P(Eve))
+              </Label>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={params.include_theory}
+                  onCheckedChange={(checked) => setParams({ ...params, include_theory: checked })}
+                  disabled={params.protocol === "e91"}
+                />
+                {params.protocol === "e91" && (
+                  <span className="text-xs text-muted-foreground">Unavailable for E91</span>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -154,9 +243,7 @@ export function SweepPanel() {
               disabled={sweep.isPending}
               className="flex-1 bg-quantum-cyan hover:bg-quantum-cyan/80 text-background glow-border"
             >
-              {sweep.isPending ? (
-                "Running..."
-              ) : (
+              {sweep.isPending ? "Running..." : (
                 <>
                   <Play className="mr-2 h-4 w-4" />
                   Run Sweep
@@ -177,45 +264,48 @@ export function SweepPanel() {
 
       <div className="space-y-6">
         {sweep.isPending && <LoadingSkeleton />}
-        
+
         {sweep.data && (
           <>
             <div className="grid grid-cols-3 gap-4">
               <Badge variant="outline" className="p-3 justify-center border-quantum-cyan/30 bg-quantum-cyan/5">
                 <div className="text-center">
                   <TrendingDown className="h-4 w-4 mx-auto mb-1 text-quantum-cyan" />
-                  <div className="text-xs text-muted-foreground">Min QBER</div>
-                  <div className="text-lg font-bold text-quantum-cyan">{stats?.minQber.toFixed(4)}</div>
+                  <div className="text-xs text-muted-foreground">Min QBER (HW)</div>
+                  <div className="text-lg font-bold text-quantum-cyan">
+                    {stats?.minQberHardware.toFixed(4)}
+                  </div>
                 </div>
               </Badge>
               <Badge variant="outline" className="p-3 justify-center border-destructive/30 bg-destructive/5">
                 <div className="text-center">
                   <TrendingUp className="h-4 w-4 mx-auto mb-1 text-destructive" />
-                  <div className="text-xs text-muted-foreground">Max QBER</div>
-                  <div className="text-lg font-bold text-destructive">{stats?.maxQber.toFixed(4)}</div>
+                  <div className="text-xs text-muted-foreground">Max QBER (HW)</div>
+                  <div className="text-lg font-bold text-destructive">
+                    {stats?.maxQberHardware.toFixed(4)}
+                  </div>
                 </div>
               </Badge>
               <Badge variant="outline" className="p-3 justify-center border-quantum-purple/30 bg-quantum-purple/5">
                 <div className="text-center">
                   <CheckCircle2 className="h-4 w-4 mx-auto mb-1 text-quantum-purple" />
-                  <div className="text-xs text-muted-foreground">Success</div>
-                  <div className="text-lg font-bold text-quantum-purple">{stats?.successRate.toFixed(1)}%</div>
+                <div className="text-xs text-muted-foreground">Success (HW)</div>
+                  <div className="text-lg font-bold text-quantum-purple">
+                    {stats?.successRateHardware.toFixed(1)}%
+                  </div>
                 </div>
               </Badge>
             </div>
 
-            <ChartCard title="QBER vs Noise" description="Quantum Bit Error Rate analysis">
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorQber" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--quantum-cyan))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--quantum-cyan))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+            <ChartCard
+              title="QBER vs P(Eve)"
+              description={`Comparison of simulated curves (ideal vs hardware noise = ${(params.hardware_noise * 100).toFixed(1)}%)${params.protocol === "bb84" && params.include_theory ? " with theoretical bound" : ""}`}
+            >
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="noise" stroke="hsl(var(--muted-foreground))" />
-                  <YAxis stroke="hsl(var(--muted-foreground))" />
+                  <YAxis domain={[0, 0.5]} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
@@ -224,17 +314,47 @@ export function SweepPanel() {
                     }}
                   />
                   <Legend />
-                  <Area type="monotone" dataKey="qber" stroke="hsl(var(--quantum-cyan))" fill="url(#colorQber)" strokeWidth={2} />
-                </AreaChart>
+
+                  <Line
+                    type="monotone"
+                    dataKey="qberIdeal"
+                    name="Simulated — Ideal HW"
+                    stroke="hsl(var(--quantum-cyan))"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="qberHardware"
+                    name={`Simulated — HW noise = ${(params.hardware_noise * 100).toFixed(1)}%`}
+                    stroke="hsl(var(--quantum-purple))"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  {sweep.data.qber_theoretical && (
+                    <Line
+                      type="monotone"
+                      dataKey="qberTheory"
+                      name="Theoretical (0.25·P(Eve))"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeDasharray="6 6"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+                </LineChart>
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard title="Success Rate" description="Key establishment success by noise level">
-              <ResponsiveContainer width="100%" height={200}>
+            <ChartCard title="Success by P(Eve)" description="Key establishment success (1) / fail (0) for each curve">
+              <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="noise" stroke="hsl(var(--muted-foreground))" />
-                  <YAxis stroke="hsl(var(--muted-foreground))" />
+                  <YAxis domain={[0, 1]} allowDecimals={false} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
@@ -242,7 +362,25 @@ export function SweepPanel() {
                       borderRadius: "8px",
                     }}
                   />
-                  <Line type="stepAfter" dataKey="success" stroke="hsl(var(--quantum-purple))" strokeWidth={2} />
+                  <Legend />
+                  <Line
+                    type="stepAfter"
+                    dataKey="successIdeal"
+                    name="Success — Ideal HW"
+                    stroke="hsl(var(--quantum-cyan))"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="stepAfter"
+                    dataKey="successHardware"
+                    name="Success — Hardware"
+                    stroke="hsl(var(--quantum-purple))"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
